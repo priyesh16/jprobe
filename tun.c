@@ -345,7 +345,7 @@ read_event (int sockint)
             return -1;        // Error
          }
          if (h->nlmsg_type == RTM_NEWLINK) {
-            iface = NLMSG_DATA (h);
+            iface = (ifinfomsg *)NLMSG_DATA (h);
             len = h->nlmsg_len - NLMSG_LENGTH(sizeof(*iface));
             /* loop over all attributes for the NEWLINK message */
             for (attribute = IFLA_RTA(iface); RTA_OK(attribute, len); 
@@ -388,25 +388,54 @@ void listenTunnels(int ifIndex) {
    if (ifIndex) {
       char digits[5];
       long int offsetdata;
-      ifIndex = 96;
+      ifIndex = 10;
+      int lenDigits = 2;
       snprintf(digits, 12,"%d",ifIndex);
       printf("ifindex is %s \n", digits );
-      printf("ifindex is %d \n", digits[0] );
-      printf("ifindex is %d \n", digits[1] );
+      printf("digit0 is %d \n", digits[0] );
+      printf("digit1 is %d \n", digits[1] );
       
       offsetdata = 216; //sk->data
 
+/*
       struct sock_filter code[] = {
         { 0x20,  0,  0, 0xfffff00c },
         { 0x01,  0,  0, 0x00000010 },
-        { 0x50,  0,  0, 0x00000017 },
-        { 0x15,  0,  3, digits[0] },
         { 0x50,  0,  0, 0x00000018 },
-        { 0x15,  0,  0, digits[1] },
-        { 0x06,  0,  0, 0xffffffff },
-        { 0x06,  0,  0, 0000000000 },
+        { 0x15,  0,  3, digits[1] },
+        { 0x50,  0,  0, 0x00000017 },
+        { 0x15,  0,  1, digits[0] },
+        { 0x06,  0,  0, 0xffffffff }, // is 
+        { 0x06,  0,  0, 0000000000 }, // isnot
+      };
+*/
+
+      struct sock_filter code[] = {
+         { 0x20,  0,  0, 0xfffff00c }, /* ld #nla ;skb->data */
+         { 0x01,  0,  0, 0x00000010 }, /* ldx #16 ; X = offset(ifinfomsg) */
+         { 0,  0,  0, 0x00000000 }, /* ldx #16 ; X = offset(ifinfomsg) */
+         { 0,  0,  0, 0x00000000 }, /* ldx #16 ; X = offset(ifinfomsg) */
+         { 0,  0,  0, 0x00000000 }, /* ldx #16 ; X = offset(ifinfomsg) */
+         { 0,  0,  0, 0x00000000 }, /* ldx #16 ; X = offset(ifinfomsg) */
+         { 0,  0,  0, 0x00000000 }, /* ldx #16 ; X = offset(ifinfomsg) */
+         { 0,  0,  0, 0x00000000 }, /* ldx #16 ; X = offset(ifinfomsg) */
+         { 0,  0,  0, 0x00000000 }, /* ldx #16 ; X = offset(ifinfomsg) */
+         { 0,  0,  0, 0x00000000 }, /* ldx #16 ; X = offset(ifinfomsg) */
+         { 0x06,  0,  0, 0xffffffff }, /* ret #-1 */
+         { 0x06,  0,  0, 0000000000 }, /* skip: ret #0 */
       };
 
+      if ( lenDigits == 1 ) {
+            code[ 8 ] = { 0x50,  0,  0, 0x00000017 };
+            code[ 9 ] = { 0x15,  0,  1, (unsigned int)digits[0] };
+      }
+
+      if ( lenDigits == 2 ) {
+            code[ 6 ] = { 0x50,  0,  0, 0x00000018 };
+            code[ 7 ] = { 0x15,  0,  3, (unsigned int)digits[1] };
+            code[ 8 ] = { 0x50,  0,  0, 0x00000017 };
+            code[ 9 ] = { 0x15,  0,  1, (unsigned int)digits[0] };
+      }
       #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
 
       struct sock_fprog bpf = {
@@ -437,7 +466,7 @@ void listenTunnels(int ifIndex) {
    }
 }
 
-void main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
    long index;
    memset(&myTunnels, 0, sizeof(myTunnels));
    getTunnels();
@@ -454,10 +483,10 @@ void main(int argc, char *argv[]) {
       listenTunnels(0);
    }
    if (!strcmp(argv[1], "mul") ) {
-      deleteTunnel("pri96");
-      deleteTunnel("pri87");
-      addTunnel("96");
-      addTunnel("87");
+      deleteTunnel("pri1");
+      deleteTunnel("pri10");
+      addTunnel("1");
+      addTunnel("10");
    }
    if (!strcmp(argv[1], "filter") ) {
       index = strtol(argv[2], NULL, 10);
